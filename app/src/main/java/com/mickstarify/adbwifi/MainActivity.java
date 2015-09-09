@@ -92,8 +92,8 @@ public class MainActivity extends AppCompatActivity {
         if (state == States.INTRANSITION) {
             return;
         }
-        Button toggleBtn = (Button) findViewById(R.id.btn_toggleADB);
-        SU_Executor executor = (SU_Executor) new SU_Executor();
+        SU_Executor executor = new SU_Executor();
+
         if (state == States.ACTIVE) {
             //we are turning off the adb server
             executor.execute(
@@ -104,6 +104,9 @@ public class MainActivity extends AppCompatActivity {
             executor.execute(
                     ShellOperation.START
             );
+        }
+        else if (state == States.FAILED){
+            closeApplication();
         }
 
         if (!checkWifiState()){
@@ -188,13 +191,11 @@ public class MainActivity extends AppCompatActivity {
         else if (state == States.FAILED){
             getSupportActionBar().setTitle("ADB Wifi (FAILED)");
             toggleBtn.setTextColor(Color.RED);
+            toggleBtn.setText("Exit");
             //getSupportActionBar().setBackgroundDrawable(new ColorDrawable(Color.RED));
         }
     }
 
-    private void fadeText(){
-
-    }
 
     private String getIPAddress() {
         WifiManager wm = (WifiManager) getSystemService(WIFI_SERVICE);
@@ -214,18 +215,24 @@ public class MainActivity extends AppCompatActivity {
             try {
                 if (shellOp == ShellOperation.CHECK_ACTIVE)
                 {
-                    publishProgress(getString(R.string.checking_status_msg));
-                    List<String> ret = Shell.SU.run(
-                            "getprop service.adb.tcp.port"
-                    );
-                    if (ret.get(0).equals("-1")) {
-                        publishProgress(getString(R.string.server_inactive));
-                        return States.INACTIVE;
-                    } else if (ret.get(0).equals("5555")) {
-                        publishProgress(getString(R.string.server_active));
-                        return States.ACTIVE;
-                    } else {
-                        Log.e(getPackageName(), "unknown ret from checkOp, " + ret.get(0));
+                    if (Shell.SU.available()) {
+                        publishProgress(getString(R.string.checking_status_msg));
+                        List<String> ret = Shell.SU.run(
+                                "getprop service.adb.tcp.port"
+                        );
+                        if (ret.get(0).equals("-1")) {
+                            publishProgress(getString(R.string.server_inactive));
+                            return States.INACTIVE;
+                        } else if (ret.get(0).equals("5555")) {
+                            publishProgress(getString(R.string.server_active));
+                            return States.ACTIVE;
+                        } else {
+                            Log.e(getPackageName(), "unknown ret from checkOp, " + ret.get(0));
+                            return States.FAILED;
+                        }
+                    }
+                    else{
+                        publishProgress("Error obtaining Root privileges");
                         return States.FAILED;
                     }
                 }
@@ -243,8 +250,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 else if (shellOp == ShellOperation.START) {
-                    publishProgress("Executing: setprop service.adb.tcp.port 5555");
                     if (Shell.SU.available()) {
+                        publishProgress("Executing: setprop service.adb.tcp.port 5555");
                         Shell.SU.run("setprop service.adb.tcp.port 5555");
                         States s = doInBackground(ShellOperation.CHECK_ACTIVE);
                         if (s == States.ACTIVE) {
@@ -259,8 +266,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 else if (shellOp == ShellOperation.STOP) {
-                    publishProgress("Executing: setprop service.adb.tcp.port -1");
                     if (Shell.SU.available()) {
+                        publishProgress("Executing: setprop service.adb.tcp.port -1");
                         Shell.SU.run("setprop service.adb.tcp.port -1");
                         States s = doInBackground(ShellOperation.CHECK_ACTIVE);
                         if (s == States.INACTIVE) {

@@ -3,7 +3,5 @@
 
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="android:colorPrimary">#2196f3</item>
-
-        <!--<item name="android:colorButtonNormal">#2196f3</item>-->
     </style>
 </resources>
