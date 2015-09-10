@@ -119,7 +119,6 @@ public class MainActivity extends AppCompatActivity {
         final TextView adb_connect = (TextView) findViewById(lbl_connect_help);
 
         Button toggleBtn = (Button) findViewById(R.id.btn_toggleADB);
-        RelativeLayout rel_toggleBtn = (RelativeLayout) findViewById(R.id.rel_toggleADB);
 
         final Animation fadeIn = new AlphaAnimation(0.0f, 1.0f);
         fadeIn.setDuration(500);
@@ -220,15 +219,19 @@ public class MainActivity extends AppCompatActivity {
                         List<String> ret = Shell.SU.run(
                                 "getprop service.adb.tcp.port"
                         );
-                        if (ret.get(0).equals("-1")) {
+                        if (ret.get(0).equals("-1") || ret.get(0).equals("0")) {
                             publishProgress(getString(R.string.server_inactive));
                             return States.INACTIVE;
                         } else if (ret.get(0).equals("5555")) {
                             publishProgress(getString(R.string.server_active));
                             return States.ACTIVE;
-                        } else {
+                        } else if (ret.get(0).matches("^[0-9]+$")) {
+                            publishProgress("Unknown server port open: " + ret.get(0));
+                            return States.INACTIVE;
+                        }
+                        else{
                             Log.e(getPackageName(), "unknown ret from checkOp, " + ret.get(0));
-                            return States.FAILED;
+                            return States.INACTIVE;
                         }
                     }
                     else{
