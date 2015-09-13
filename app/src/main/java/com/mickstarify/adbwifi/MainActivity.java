@@ -18,7 +18,6 @@ import android.view.View;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.widget.Button;
-import android.widget.RelativeLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -73,11 +72,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //returns whether or not we are connected to a wifi network.
-    private boolean checkWifiState(){
+    private boolean checkWifiState() {
         WifiManager mainWifi = (WifiManager) getSystemService(this.WIFI_SERVICE);
         if (mainWifi.isWifiEnabled()) {
             WifiInfo currentWifi = mainWifi.getConnectionInfo();
-            if (currentWifi.getSSID() != null){
+            if (currentWifi.getSSID() != null) {
                 return true;
             }
         }
@@ -104,12 +103,11 @@ public class MainActivity extends AppCompatActivity {
             executor.execute(
                     ShellOperation.START
             );
-        }
-        else if (state == States.FAILED){
+        } else if (state == States.FAILED) {
             closeApplication();
         }
 
-        if (!checkWifiState()){
+        if (!checkWifiState()) {
             updateDisplayShell("Error, no wifi connection!\n");
         }
     }
@@ -160,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        if (state == States.ACTIVE){
+        if (state == States.ACTIVE) {
             getSupportActionBar().setTitle("ADB Wifi (ACTIVE)");
             toggleBtn.setText(R.string.btn_stopServer);
             toggleBtn.setTextColor(Color.parseColor("#2196f3")); //blue
@@ -174,8 +172,7 @@ public class MainActivity extends AppCompatActivity {
 
             adb_connect.setText(getString(R.string.run_command) + " " + ip);
             adb_connect.setAnimation(fadeIn);
-        }
-        else if (state == States.INACTIVE){
+        } else if (state == States.INACTIVE) {
             getSupportActionBar().setTitle("ADB Wifi (INACTIVE)");
             toggleBtn.setText(R.string.btn_startServer);
             toggleBtn.setTextColor(Color.GRAY);
@@ -186,11 +183,12 @@ public class MainActivity extends AppCompatActivity {
             ip_listening.setAnimation(fadeOut);
 
             adb_connect.setAnimation(fadeOut);
-        }
-        else if (state == States.FAILED){
+        } else if (state == States.FAILED) {
             getSupportActionBar().setTitle("ADB Wifi (FAILED)");
             toggleBtn.setTextColor(Color.RED);
             toggleBtn.setText("Exit");
+            ip_listening.setVisibility(View.INVISIBLE);
+            adb_connect.setVisibility(View.INVISIBLE);
             //getSupportActionBar().setBackgroundDrawable(new ColorDrawable(Color.RED));
         }
     }
@@ -210,11 +208,11 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected States doInBackground(ShellOperation... shellOps) {
-            ShellOperation shellOp = shellOps[0];
-            try {
-                if (shellOp == ShellOperation.CHECK_ACTIVE)
-                {
-                    if (Shell.SU.available()) {
+            publishProgress("Attempting to get Root privileges");
+            if (Shell.SU.available()) {
+                ShellOperation shellOp = shellOps[0];
+                try {
+                    if (shellOp == ShellOperation.CHECK_ACTIVE) {
                         publishProgress(getString(R.string.checking_status_msg));
                         List<String> ret = Shell.SU.run(
                                 "getprop service.adb.tcp.port"
@@ -228,34 +226,19 @@ public class MainActivity extends AppCompatActivity {
                         } else if (ret.get(0).matches("^[0-9]+$")) {
                             publishProgress("Unknown server port open: " + ret.get(0));
                             return States.INACTIVE;
-                        }
-                        else{
+                        } else {
                             Log.e(getPackageName(), "unknown ret from checkOp, " + ret.get(0));
                             return States.INACTIVE;
                         }
-                    }
-                    else{
-                        publishProgress("Error obtaining Root privileges");
-                        return States.FAILED;
-                    }
-                }
-                else if (shellOp == ShellOperation.CHECK_ACTIVE_QUIET){
-                    List<String> ret = Shell.SU.run(
-                            "getprop service.adb.tcp.port"
-                    );
-                    if (ret.get(0).equals("-1")) {
-                        return States.INACTIVE;
-                    } else if (ret.get(0).equals("5555")) {
-                        return States.ACTIVE;
-                    } else {
-                        Log.e(getPackageName(), "unknown ret from checkOp, " + ret.get(0));
-                        return States.FAILED;
-                    }
-                }
-                else if (shellOp == ShellOperation.START) {
-                    if (Shell.SU.available()) {
+                    } else if (shellOp == ShellOperation.START) {
                         publishProgress("Executing: setprop service.adb.tcp.port 5555");
+//                        Shell.SU.run("pkill adbd");
                         Shell.SU.run("setprop service.adb.tcp.port 5555");
+                        publishProgress("Executing: stop adbd");
+                        Shell.SU.run("stop adbd");
+                        publishProgress("Executing: start adbd");
+                        Shell.SU.run("start adbd");
+                        //Shell.SU.run("");
                         States s = doInBackground(ShellOperation.CHECK_ACTIVE);
                         if (s == States.ACTIVE) {
                             return States.ACTIVE;
@@ -263,15 +246,13 @@ public class MainActivity extends AppCompatActivity {
                             publishProgress("There was an error enabling ADB Wifi");
                             return s;
                         }
-                    } else {
-                        publishProgress("Error obtaining Root Privileges!");
-                        return States.FAILED;
-                    }
-                }
-                else if (shellOp == ShellOperation.STOP) {
-                    if (Shell.SU.available()) {
+                    } else if (shellOp == ShellOperation.STOP) {
                         publishProgress("Executing: setprop service.adb.tcp.port -1");
                         Shell.SU.run("setprop service.adb.tcp.port -1");
+                        publishProgress("Executing: stop adbd");
+                        Shell.SU.run("stop adbd");
+                        publishProgress("Executing: start adbd");
+                        Shell.SU.run("start adbd");
                         States s = doInBackground(ShellOperation.CHECK_ACTIVE);
                         if (s == States.INACTIVE) {
                             return States.INACTIVE;
@@ -279,17 +260,15 @@ public class MainActivity extends AppCompatActivity {
                             publishProgress(getString(R.string.error_disabling_adb));
                             return s;
                         }
-                    } else {
-                        publishProgress("Error obtaining Root Privileges!");
-                        return States.FAILED;
                     }
+                } catch (Exception e) {
+                    Log.e(getPackageName(), "Error!, " + e.getMessage());
+                    e.printStackTrace();
+                    return States.FAILED;
                 }
-            } catch (Exception e) {
-                Log.e (getPackageName(), "Error!, " + e.getMessage());
-                e.printStackTrace();
-                return States.FAILED;
+            } else {
+                publishProgress("Error getting Root privileges");
             }
-
             return States.FAILED;
         }
 
@@ -336,7 +315,7 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_about){
+        if (id == R.id.action_about) {
             Intent aboutScreen = new Intent(this, About.class);
             startActivity(aboutScreen);
 
